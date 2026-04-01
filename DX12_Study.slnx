@@ -3,5 +3,8 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="Study/Study.vcxproj" />
+  <Folder Name="/Renderer/" />
+  <Folder Name="/Study/">
+    <Project Path="_01_window/_01_window.vcxproj" Id="8e82ffd7-54a9-4ac1-88e8-60ed3678ad5c" />
+  </Folder>
 </Solution>
