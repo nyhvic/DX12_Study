@@ -119,6 +119,16 @@ void InitDX12(HWND hwnd) {
 	
 }
 
+void WaitForGPU() {
+	g_commandQueue->Signal(g_fence.Get(), g_fenceValue); // 현재 펜스 값으로 시그널, gpu가 이 시점까지 작업 완료하면 펜스 값이 증가
+
+	if (g_fence->GetCompletedValue() < g_fenceValue) { // gpu가 아직 작업 완료 안했으면
+		g_fence->SetEventOnCompletion(g_fenceValue, g_fenceEvent); // 펜스 값이 될 때 이벤트 발생
+		WaitForSingleObject(g_fenceEvent, INFINITE); // 이벤트 대기
+	}
+	g_fenceValue++; // 다음 프레임을 위해 펜스 값 증가
+}
+
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In_ int nCmdShow) {
 	/*
 	windows api 창
@@ -165,4 +175,42 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE, _In_ LPSTR, _In
 	}
 
 	return 0;
+}
+
+void Render() {
+	//command list reset
+	g_commandAllocator->Reset();
+	g_commandList->Reset(g_commandAllocator.Get(), nullptr);
+
+	//barrier 설정, Present(그릴 수 있는 상태)에서 Render target으로 전환
+	D3D12_RESOURCE_BARRIER barrier = {};
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Transition.pResource = g_renderTargets[g_frameIndex].Get();
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	g_commandList->ResourceBarrier(1, &barrier);
+
+	// RTV
+	D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle(g_rtvHeap->GetCPUDescriptorHandleForHeapStart());
+	rtvHandle.ptr += g_frameIndex * g_rtvDescriptorSize; // 현재 버퍼 RTV 핸들
+	const float clearColor[] = { 0.0f, 0.0f, 0.0f, 0.0f }; // RGBA
+	g_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr); // rtv 한 색으로 클리어
+
+	//barrier render target to present
+	barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	g_commandList->ResourceBarrier(1, &barrier);
+
+	//command close, submit
+	g_commandList->Close();
+	ID3D12CommandList* lists[] = { g_commandList.Get() };
+	g_commandQueue->ExecuteCommandLists(1, lists); // 명령 리스트 실행
+	
+	//출력
+	g_swapChain->Present(1, 0); // 화면에 표시, 1은 수직 동기화, 0은 옵션
+
+	//GPU 작업 대기
+	WaitForGPU();
+	g_frameIndex = g_swapChain->GetCurrentBackBufferIndex(); // 다음 프레임 버퍼 인덱스 가져오기
 }
