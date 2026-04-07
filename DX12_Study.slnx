@@ -6,5 +6,6 @@
   <Folder Name="/Renderer/" />
   <Folder Name="/Study/">
     <Project Path="_01_window/_01_window.vcxproj" Id="8e82ffd7-54a9-4ac1-88e8-60ed3678ad5c" />
+    <Project Path="_02_draw/_02_draw.vcxproj" Id="64d64ed6-5aaf-4d8e-9532-e6e4474247d8" />
   </Folder>
 </Solution>
