@@ -16,51 +16,67 @@ class DXApp {
 public:
 	DXApp(HINSTANCE hInstance);
 	void Init();
-	void BeginFrame();
-	void EndFrame();
+	void Run();
 
 	void WaitforGPU();
 	void Cleanup();
 
 	LRESULT MsgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
-	ID3D12Device* GetDevice()      const { return g_device.Get(); }
-	ID3D12GraphicsCommandList* GetCommandList() const { return g_commandList.Get(); }
-	D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle()   const;
-	static DXApp* GetApp() { return g_app; }
+	ID3D12Device* GetDevice()      const { return m_device.Get(); }
+	ID3D12GraphicsCommandList* GetCommandList() const { return m_commandList.Get(); }
+	//D3D12_CPU_DESCRIPTOR_HANDLE GetRTVHandle()   const;
+	const D3D12_VIEWPORT& GetViewport()    const { return m_viewport; }
+	const D3D12_RECT& GetScissorRect() const { return m_scissorRect; }
+	static DXApp* GetApp() { return m_app; }
+
+	UINT dxgiFlags = 0;
 
 protected:
 	void InitWindow();
 	void InitDX12();
+
 	void InitFactory();
 	void InitDevice();
 	void InitCommandQueue();
-	void InitSwapChain(HWND hwnd, UINT width, UINT height);
-	void InitRTV();
 	void InitCommandObjects();
 	void InitFence();
 
-	static DXApp* g_app;
+	void ReleaseRenderTargets();
+	void InitSwapChain(UINT width, UINT height);
+	void InitRTV();
+	void Resize(UINT width, UINT height);
 
-	HWND g_hwnd = nullptr;
-	HINSTANCE g_hInstance = nullptr;
+	void BeginFrame();
+	void EndFrame();
+	void Render();
 
-	ComPtr<IDXGIFactory6>               g_factory;
-	ComPtr<ID3D12Device>                g_device;
-	ComPtr<ID3D12CommandQueue>          g_commandQueue;
-	ComPtr<IDXGISwapChain3>             g_swapChain;
+	UINT m_width;
+	UINT m_height;
 
-	ComPtr<ID3D12DescriptorHeap>        g_rtvHeap;
-	UINT                                g_rtvDescriptorSize = 0;
-	ComPtr<ID3D12Resource>              g_renderTargets[FRAME_COUNT];
+	D3D12_VIEWPORT m_viewport = {};
+	D3D12_RECT     m_scissorRect = {};
 
-	ComPtr<ID3D12CommandAllocator>      g_commandAllocator;
-	ComPtr<ID3D12GraphicsCommandList>   g_commandList;
+	static DXApp* m_app;
 
-	ComPtr<ID3D12Fence>                 g_fence;
-	UINT64                              g_fenceValue = 0;
-	HANDLE                              g_fenceEvent = nullptr;
+	HWND m_hwnd = nullptr;
+	HINSTANCE m_hInstance = nullptr;
 
-	UINT                                g_frameIndex = 0;
-	float                               g_clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	ComPtr<IDXGIFactory6>               m_factory;
+	ComPtr<ID3D12Device>                m_device;
+	ComPtr<ID3D12CommandQueue>          m_commandQueue;
+	ComPtr<IDXGISwapChain3>             m_swapChain;
+
+	ComPtr<ID3D12DescriptorHeap>        m_rtvHeap;
+	UINT                                m_rtvDescriptorSize = 0;
+	ComPtr<ID3D12Resource>              m_renderTargets[FRAME_COUNT];
+
+	ComPtr<ID3D12CommandAllocator>      m_commandAllocator;
+	ComPtr<ID3D12GraphicsCommandList>   m_commandList;
+
+	ComPtr<ID3D12Fence>                 m_fence;
+	UINT64                              m_fenceValue = 0;
+	HANDLE                              m_fenceEvent = nullptr;
+	UINT                                m_frameIndex = 0;
+	float                               m_clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
