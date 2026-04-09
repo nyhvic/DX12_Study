@@ -2,9 +2,15 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="include\DXApp.h" />
+    <ClInclude Include="include\DXUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\DXApp.cpp" />
     <ClCompile Include="src\main.cpp" />
+    <ClCompile Include="src\DXUtil.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders\vertex.hlsl" />
+    <FxCompile Include="shaders\pixel.hlsl" />
   </ItemGroup>
 </Project>

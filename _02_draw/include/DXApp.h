@@ -4,11 +4,22 @@
 #include<d3d12.h>
 #include<dxgi1_6.h>
 #include<wrl/client.h>
+#include<DirectXMath.h>
+#include<d3dcompiler.h>
+#include<vector>
+#include<array>
 
+#pragma comment(lib, "d3dcompiler.lib")
 #pragma comment(lib, "d3d12.lib")
 #pragma comment(lib, "dxgi.lib")
 
 using Microsoft::WRL::ComPtr;	
+using namespace DirectX;
+
+struct Vertex {
+	XMFLOAT3 pos;
+	XMFLOAT4 color;
+};
 
 constexpr UINT FRAME_COUNT = 2;	
 
@@ -47,9 +58,15 @@ protected:
 	void InitRTV();
 	void Resize(UINT width, UINT height);
 
+	void InitRootSignature();
+	void InitShader();
+	void InitTriangle();
+	void InitPSO();
+
 	void BeginFrame();
 	void EndFrame();
 	void Render();
+
 
 	UINT m_width;
 	UINT m_height;
@@ -78,5 +95,17 @@ protected:
 	UINT64                              m_fenceValue = 0;
 	HANDLE                              m_fenceEvent = nullptr;
 	UINT                                m_frameIndex = 0;
-	float                               m_clearColor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+	float                               m_clearColor[4] = { 0.2f, 0.2f, 0.2f, 0.0f };
+
+	ComPtr<ID3D12RootSignature> m_rootSignature;
+	std::vector<D3D12_INPUT_ELEMENT_DESC> m_inputLayout;
+	ComPtr<ID3D12PipelineState> m_pipelineState; //PSO
+	ComPtr<ID3D12Resource>      m_vertexBuffer;
+	D3D12_VERTEX_BUFFER_VIEW    m_vertexBufferView = {};
+	ComPtr<ID3D12Resource>      m_indexBuffer;
+	D3D12_INDEX_BUFFER_VIEW     m_indexBufferView = {};
+	UINT m_indexCount = 0;
+
+	ComPtr<ID3DBlob> m_vsBlob;
+	ComPtr<ID3DBlob> m_psBlob;
 };

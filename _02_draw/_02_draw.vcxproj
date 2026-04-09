@@ -128,10 +128,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\DXApp.h" />
+    <ClInclude Include="include\DXUtil.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\DXApp.cpp" />
+    <ClCompile Include="src\DXUtil.cpp" />
     <ClCompile Include="src\main.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders\pixel.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
+    <FxCompile Include="shaders\vertex.hlsl">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </FxCompile>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,4 +1,5 @@
 #include"../include/DXApp.h"
+#include"../include/DXUtil.h"
 
 DXApp* DXApp::m_app = nullptr;
 DXApp::DXApp(HINSTANCE hInstance):m_hInstance(hInstance) {
@@ -71,8 +72,12 @@ void DXApp::InitDX12() {
 	InitCommandQueue();
 	InitCommandObjects();
 	InitFence();
-
 	Resize(1600, 900);
+
+	InitRootSignature();
+	InitShader();
+	InitTriangle();
+	InitPSO();
 }	
 
 void DXApp::InitFactory() {
@@ -182,7 +187,7 @@ void DXApp::InitRTV() {
 }
 
 void DXApp::WaitforGPU() {
-	// GPU가 현재 프레임 작업을 완료했는지 확인
+	// command queue flush
 	const UINT64 fence = m_fenceValue;
 	m_commandQueue->Signal(m_fence.Get(), fence);
 	m_fenceValue++;
@@ -200,7 +205,10 @@ void DXApp::Cleanup() {
 void DXApp::BeginFrame() {
 	// 명령 기록 준비
 	m_commandAllocator->Reset();
-	m_commandList->Reset(m_commandAllocator.Get(), nullptr);
+	m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get());
+
+	m_commandList->RSSetViewports(1, &m_viewport);
+	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
 	// Barrier: Present → RenderTarget
 	D3D12_RESOURCE_BARRIER barrier = {};
@@ -218,6 +226,11 @@ void DXApp::BeginFrame() {
 
 	// 화면 Clear
 	m_commandList->ClearRenderTargetView(rtvHandle, m_clearColor, 0, nullptr);
+
+	m_commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+
+	// RTV 설정
+	m_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 }
 
 void DXApp::EndFrame()
@@ -247,6 +260,10 @@ void DXApp::EndFrame()
 void DXApp::Render() {
 	BeginFrame();
 	//draw call
+	m_commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+	m_commandList->IASetIndexBuffer(&m_indexBufferView);
+	m_commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_commandList->DrawIndexedInstanced(3, 1, 0, 0, 0);
 	EndFrame();
 }
 
@@ -264,4 +281,138 @@ void DXApp::Run() {
 			Render();
 		}
 	}
+}
+
+void DXApp::InitRootSignature() {
+	D3D12_ROOT_SIGNATURE_DESC rsDesc = {};
+	rsDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	ComPtr<ID3DBlob> signature;
+	ComPtr<ID3DBlob> error;
+	D3D12SerializeRootSignature(&rsDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+	m_device->CreateRootSignature(
+		0,
+		signature->GetBufferPointer(),
+		signature->GetBufferSize(),
+		IID_PPV_ARGS(&m_rootSignature)
+	);
+}
+
+void DXApp::InitShader() {
+	UINT compileFlags = 0;
+	ComPtr<ID3DBlob> error;
+#if defined(_DEBUG)
+	compileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+	m_vsBlob = DXUtil::CompileShader(L"shaders/vertex.hlsl", nullptr, "VSMain", "vs_5_0");
+	m_psBlob = DXUtil::CompileShader(L"shaders/pixel.hlsl", nullptr, "PSMain", "ps_5_0");
+
+	m_inputLayout =
+	{
+		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+}
+
+void DXApp::InitTriangle() {
+	std::array<Vertex,3> vertices =
+	{
+		Vertex{ XMFLOAT3{ 0.0f, 0.5f, 0.0f }, XMFLOAT4{ 1.0f, 0.0f, 0.0f, 1.0f } },
+		Vertex{ XMFLOAT3{ 0.5f, -0.5f, 0.0f }, XMFLOAT4{ 0.0f, 1.0f, 0.0f, 1.0f } },
+		Vertex{ XMFLOAT3{ -0.5f, -0.5f, 0.0f }, XMFLOAT4{ 0.0f, 0.0f, 1.0f, 1.0f } }
+	};
+	
+	std::array<UINT, 3> indices = { 0,1,2 };
+
+	const UINT vertexBufferSize = (UINT)vertices.size() * sizeof(Vertex);
+	const UINT indexBufferSize = (UINT)indices.size() * sizeof(UINT);
+
+	//추후 이과정 묶어서 Create DefaultBuffer 같은 함수로 만들기
+	D3D12_HEAP_PROPERTIES vertexHeapProps = {};
+	vertexHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+	D3D12_RESOURCE_DESC vertexResDesc = {};
+	vertexResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	vertexResDesc.Width = vertexBufferSize;
+	vertexResDesc.Height = 1;
+	vertexResDesc.DepthOrArraySize = 1;
+	vertexResDesc.MipLevels = 1;
+	vertexResDesc.Format = DXGI_FORMAT_UNKNOWN;
+	vertexResDesc.SampleDesc.Count = 1;
+	vertexResDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	m_device->CreateCommittedResource(
+		&vertexHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&vertexResDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&m_vertexBuffer)
+	);
+
+	// CPU → GPU 메모리로 버텍스 데이터 복사
+	void* mappedVertexData = nullptr;
+	m_vertexBuffer->Map(0, nullptr, &mappedVertexData);
+	memcpy(mappedVertexData, vertices.data(), vertexBufferSize);
+	m_vertexBuffer->Unmap(0, nullptr);
+
+	// Vertex Buffer View 설정
+	m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+	m_vertexBufferView.SizeInBytes = vertexBufferSize;
+	m_vertexBufferView.StrideInBytes = sizeof(Vertex);
+
+	D3D12_HEAP_PROPERTIES indexHeapProps = {};
+	indexHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+	D3D12_RESOURCE_DESC indexResDesc = {};
+	indexResDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	indexResDesc.Width = indexBufferSize;
+	indexResDesc.Height = 1;
+	indexResDesc.DepthOrArraySize = 1;
+	indexResDesc.MipLevels = 1;
+	indexResDesc.Format = DXGI_FORMAT_UNKNOWN;
+	indexResDesc.SampleDesc.Count = 1;
+	indexResDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+
+	m_device->CreateCommittedResource(
+		&indexHeapProps,
+		D3D12_HEAP_FLAG_NONE,
+		&indexResDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		nullptr,
+		IID_PPV_ARGS(&m_indexBuffer)
+	);
+
+	void* mappedIndexData = nullptr;
+	m_indexBuffer->Map(0, nullptr, &mappedIndexData);
+	memcpy(mappedIndexData, indices.data(), indexBufferSize);
+	m_indexBuffer->Unmap(0, nullptr);
+
+	// Index Buffer View 설정
+	m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+	m_indexBufferView.SizeInBytes = indexBufferSize;
+	m_indexBufferView.Format = DXGI_FORMAT_R32_UINT;
+}
+
+void DXApp::InitPSO() {
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+	psoDesc.pRootSignature = m_rootSignature.Get();
+	psoDesc.VS = { m_vsBlob->GetBufferPointer(), m_vsBlob->GetBufferSize() };
+	psoDesc.PS = { m_psBlob->GetBufferPointer(),  m_psBlob->GetBufferSize() };
+	psoDesc.InputLayout = { m_inputLayout.data(), (UINT)m_inputLayout.size() };
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+	psoDesc.NumRenderTargets = 1;
+	psoDesc.SampleDesc.Count = 1;
+	psoDesc.SampleMask = UINT_MAX;
+
+	// 래스터라이저 기본값
+	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	psoDesc.RasterizerState.DepthClipEnable = TRUE;
+
+	// 블렌드 기본값
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	m_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&m_pipelineState));
 }
