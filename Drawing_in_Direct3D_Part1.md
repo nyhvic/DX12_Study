@@ -319,7 +319,7 @@ slotRootParameter[0].InitAsDescriptorTable(
     nullptr, 
     D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
-//root signature 생성
+//root signature 생성, serialize 해서 GPU가 읽을 수 있도록 함
 ComPtr<ID3DBlob> serializedRootSig = nullptr;
 ComPtr<ID3DBlob> errorBlob = nullptr;
 HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc,
@@ -331,4 +331,11 @@ HRESULT hr = D3D12SerializeRootSignature(&rootSigDesc,
  serializedRootSig->GetBufferPointer(),
  serializedRootSig->GetBufferSize(),
  IID_PPV_ARGS(&mRootSignature)));
+ ```
+
+ ```cpp
+ //만든 root signature, cbv 바인딩하고 사용
+cmdList->SetGraphicsRootSignature(mRootSignature.Get());
+cmdList->SetGraphicsRootDescriptorTable(0, cbvHandle);
+cmdList->DrawIndexedInstanced(...);
  ```
